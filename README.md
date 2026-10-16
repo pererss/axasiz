@@ -30,7 +30,7 @@
 | `MINI_APP_URL` | ✅ | Публичный URL, напр. `https://gift-xxx.vercel.app` |
 | `BOT_USERNAME` | ✅ | Username бота без @ (для реферальных ссылок) |
 | `TELEGRAM_ADMIN_IDS` | ✅ | ID админов через запятую, напр. `123,456` |
-| `DATABASE_URL` | ✅ (прод) | Postgres (Supabase). Локально можно пустым — используется `.data/db.json` |
+| `DATABASE_URL` | ✅ (прод) | Connection string Postgres из Supabase (Project Settings → Database → Connection string, режим Transaction). Локально можно пустым — используется `.data/db.json` |
 | `WEBHOOK_SECRET` | — | Секрет для `setWebhook secret_token` |
 | `ALLOW_DEV_AUTH` | локально | `true` разрешает `?tg_id=...` без Telegram. **В проде пусто/false** |
 
@@ -63,6 +63,17 @@ curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setChatMenuButton" -H "Con
 7. Напиши боту `/start` → придёт приветствие с кнопкой «🎁 Выбрать подарок».
 8. Админ-панель: `<MINI_APP_URL>/admin` (доступ только для `TELEGRAM_ADMIN_IDS`;
    в dev-режиме — `/admin?tg_id=твой_ID`).
+
+## Supabase
+
+1. Создай бесплатный проект на https://supabase.com → получишь Project URL и ключи.
+2. Для этого приложения нужен только **Postgres connection string**: Project Settings → Database → Connection string (режим Transaction, порт 6543) → вставь в `DATABASE_URL` (Vercel → Environment Variables).
+3. Таблицы (`gifts`, `tasks`, `users`, `referrals`, `kv`) создаются приложением автоматически при первом запросе. Для чистой установки можешь выполнить `supabase/schema.sql` через SQL Editor.
+4. RLS остаётся включённым без открытых политик: браузер никогда не обращается к Supabase напрямую, все запросы идут через серверные API-роуты с приватной строкой подключения. Публичный anon-ключ в проекте не используется и никуда не вставляется.
+5. Проверка: открой Mini App → выбери подарок → перезапусти → выбор на месте (данные из Supabase).
+
+Приветствие бота (точный текст):
+«🎁 Твой подарок уже ждёт! / Выбирай свой 👇» — меняется только через админку (Настройки → Приветственный текст бота). Фото приветствия (необязательно): Настройки → «Фото приветствия» (URL картинки или Telegram file_id) — бот пришлёт фото с подписью и кнопкой «🎁 Выбрать подарок».
 
 ## Ключевая логика
 
