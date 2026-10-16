@@ -243,16 +243,37 @@ function TaskForm({ t, gifts, onSave, onDelete }: any) {
   const [v, setV] = useState(t);
   useEffect(() => setV(t), [t]);
   const set = (k: string, val: any) => setV((o: any) => ({ ...o, [k]: val }));
+  const howto: Record<string, string> = {
+    channel: "Логика встроена: автопроверка подписки через Telegram. Бот должен быть администратором канала.",
+    group: "Логика встроена: автопроверка участия через Telegram. Бот должен быть администратором группы.",
+    invite: "Логика встроена: ссылка выдаётся автоматически, считаются только новые пользователи. Меняй только название, текст и число друзей.",
+    external_bot: "Логика встроена: ручная модерация — засчитывается после перехода и короткой паузы.",
+    link: "Логика встроена: засчитывается после открытия ссылки и короткой паузы.",
+  };
+  const save = () => {
+    const n: any = { ...v };
+    if (n.kind === "invite") { n.manual = false; n.url = ""; n.chatId = ""; }
+    else if (n.kind === "channel" || n.kind === "group") { n.manual = false; n.requiredCount = 0; }
+    else { n.manual = true; n.chatId = ""; n.requiredCount = 0; }
+    onSave(n);
+  };
   return (
     <div className="card">
       <label>Задание {t.id} · {t.kind}</label>
+      <div className="msg okm" style={{ margin: "6px 0 8px", fontSize: 12 }}>⚙️ {howto[v.kind] || ""}</div>
       <input value={v.title} onChange={(e) => set("title", e.target.value)} placeholder="Название" />
       <textarea rows={2} value={v.description} onChange={(e) => set("description", e.target.value)} placeholder="Инструкция" />
-      <input value={v.url} onChange={(e) => set("url", e.target.value)} placeholder="Ссылка https://t.me/…" />
-      <div className="row2">
-        <input value={v.chatId} onChange={(e) => set("chatId", e.target.value)} placeholder="chat_id для getChatMember" />
-        <input type="number" value={v.requiredCount} onChange={(e) => set("requiredCount", Number(e.target.value))} placeholder="Нужно приглашений" />
-      </div>
+      {(v.kind === "channel" || v.kind === "group") && (<>
+        <input value={v.url} onChange={(e) => set("url", e.target.value)} placeholder="Ссылка https://t.me/…" />
+        <input value={v.chatId} onChange={(e) => set("chatId", e.target.value)} placeholder="chat_id для проверки (напр. @channel)" />
+      </>)}
+      {(v.kind === "external_bot" || v.kind === "link") && (
+        <input value={v.url} onChange={(e) => set("url", e.target.value)} placeholder="Ссылка https://t.me/…" />
+      )}
+      {v.kind === "invite" && (<>
+        <label>Сколько друзей пригласить</label>
+        <input type="number" min={1} value={v.requiredCount} onChange={(e) => set("requiredCount", Number(e.target.value))} placeholder="Число друзей" />
+      </>)}
       <div className="row2">
         <select value={v.kind} onChange={(e) => set("kind", e.target.value)}>
           <option value="channel">channel — подписка</option><option value="group">group — чат</option>
@@ -265,13 +286,10 @@ function TaskForm({ t, gifts, onSave, onDelete }: any) {
         <select value={v.enabled ? "1" : "0"} onChange={(e) => set("enabled", e.target.value === "1")}>
           <option value="1">включено</option><option value="0">выключено</option>
         </select>
-        <select value={v.manual ? "1" : "0"} onChange={(e) => set("manual", e.target.value === "1")}>
-          <option value="0">автопроверка</option><option value="1">ручная модерация</option>
-        </select>
+        <input value={(v.giftIds || []).join(",")} onChange={(e) => set("giftIds", e.target.value.split(",").map((s: string) => s.trim()).filter(Boolean))} placeholder="ID подарков (пусто = все)" />
       </div>
-      <input value={(v.giftIds || []).join(",")} onChange={(e) => set("giftIds", e.target.value.split(",").map((s: string) => s.trim()).filter(Boolean))} placeholder="ID подарков через запятую (пусто = все)" />
       <p style={{ fontSize: 11.5, color: "#64748b" }}>Доступные подарки: {(gifts || []).map((g: any) => g.id).join(", ")}</p>
-      <button className="small-btn save" onClick={() => onSave(v)}>Сохранить</button>
+      <button className="small-btn save" onClick={save}>Сохранить</button>
       <button className="small-btn del" onClick={onDelete}>Удалить</button>
     </div>
   );
