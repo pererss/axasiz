@@ -44,6 +44,7 @@ export default function Home() {
   const [serverOffset, setServerOffset] = useState(0);
   const [nowTick, setNowTick] = useState(Date.now());
   const [claim, setClaim] = useState<{ eligible: boolean; reason: string; claimUrl: string; remainingMs: number } | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const headers = useCallback(() => {
     const h: Record<string, string> = { "Content-Type": "application/json" };
@@ -74,6 +75,7 @@ export default function Home() {
       setRules(j.settings?.rulesText || "");
       setClaimUser(j.settings?.claimUsername || "");
       setWaitingDays(j.settings?.waitingDays || 7);
+      setIsAdmin(!!j.isAdmin);
       setBlocks((j.settings?.blocks || []).filter((b: any) => b.enabled).sort((a: any, b: any) => (a.order || 0) - (b.order || 0)));
       setServerOffset(Date.now() - (j.serverNow || Date.now()));
       // restore screen (skip when we just navigated instantly)
@@ -195,7 +197,6 @@ export default function Home() {
   const waitTotal = (waitingDays || 7) * 86400000;
   const waitProg = endsAt ? Math.min(100, Math.max(0, ((waitTotal - remainMs) / waitTotal) * 100)) : 0;
   const taskProg = total ? Math.round((doneCount / total) * 100) : 0;
-  const SNAKE_D = "M30,0 C60,80 0,160 30,240 C60,320 0,400 30,480 C60,560 0,640 30,720 C60,800 0,880 30,960 L30,1000";
 
   if (loading) return (
     <div className="shell"><div className="mesh"><i className="blob b1" /><i className="blob b2" /><i className="blob b3" /><i className="blob b4" /></div>
@@ -211,6 +212,14 @@ export default function Home() {
         ))}</div>
       )}
       {err && <div className="msg err" style={{ marginBottom: 10 }}>{err}</div>}
+      {isAdmin && (
+        <button className="admin-fab" aria-label="Админ-панель" title="Админ-панель" onClick={() => {
+          try {
+            const d = new URLSearchParams(window.location.search).get("tg_id");
+            window.location.href = d ? `/admin?tg_id=${d}` : "/admin";
+          } catch { window.location.href = "/admin"; }
+        }}>⚙</button>
+      )}
 
       <div className="slides">
           {/* SCREEN 1 */}
@@ -256,16 +265,6 @@ export default function Home() {
               <div className="bar"><i style={{ width: `${taskProg}%` }} /></div>
             </div>
             <div className="steps">
-              <svg className="snake" viewBox="0 0 60 1000" preserveAspectRatio="none" aria-hidden="true">
-                <defs>
-                  <linearGradient id="snakeGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stopColor="#22d3ee" /><stop offset=".5" stopColor="#818cf8" /><stop offset="1" stopColor="#e879f9" />
-                  </linearGradient>
-                </defs>
-                <path className="base" d={SNAKE_D} />
-                <path className="flow" d={SNAKE_D} />
-                <circle className="comet" r="6"><animateMotion dur="5s" repeatCount="indefinite" path={SNAKE_D} /></circle>
-              </svg>
             {tasks.map((t, i) => {
               const done = !!user?.done?.[t.id];
               const msg = taskMsg[t.id];

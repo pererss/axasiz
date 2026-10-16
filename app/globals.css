@@ -116,9 +116,9 @@ body::after {
 /* ---------- slow cinematic screen transitions ---------- */
 .slides { position: relative; }
 .slide { display: none; }
-.slide.on { display: block; animation: screenIn .18s ease-out; }
+.slide.on { display: block; animation: screenIn .35s ease-out; }
 @keyframes screenIn {
-  0% { opacity: 0; transform: translateY(8px); }
+  0% { opacity: 0; transform: translateY(14px); }
   100% { opacity: 1; transform: none; }
 }
 @keyframes cardIn { from { opacity: 0; transform: translateY(26px) scale(.96); } to { opacity: 1; transform: none; } }
@@ -154,14 +154,6 @@ body::after {
 
 /* ---------- tasks: timeline steps ---------- */
 .steps { position: relative; margin-top: 14px; }
-/* animated snake instead of a plain rail */
-.snake { position: absolute; left: 11px; top: 8px; bottom: 8px; width: 60px; height: calc(100% - 16px); overflow: visible; }
-.snake .base { fill: none; stroke: rgba(255,255,255,.1); stroke-width: 3; }
-.snake .flow { fill: none; stroke: url(#snakeGrad); stroke-width: 3; stroke-linecap: round;
-  stroke-dasharray: 10 16; animation: snakeFlow 1.1s linear infinite;
-  filter: drop-shadow(0 0 6px rgba(129,140,248,.9)); }
-@keyframes snakeFlow { to { stroke-dashoffset: -26; } }
-.snake .comet { fill: #fff; filter: drop-shadow(0 0 7px #22d3ee) drop-shadow(0 0 15px #e879f9); }
 .tstep { position: relative; display: flex; gap: 12px; padding: 15px; margin-bottom: 12px; border-radius: 20px;
   animation: cardIn .55s cubic-bezier(.22,.9,.3,1.15) both; transition: border-color .3s, box-shadow .3s; }
 .tstep.done { border-color: rgba(52,211,153,.55); box-shadow: 0 0 26px rgba(52,211,153,.22), inset 0 1px 0 rgba(255,255,255,.14); }
@@ -276,6 +268,15 @@ body::after {
   .blob, body::after, .shine { display: none !important; }
   .glass, .gift-card, .mini-gift { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
 }
+
+/* ---------- admin floating entry (visible to admins only) ---------- */
+.admin-fab { position: fixed; right: 16px; bottom: calc(var(--sab) + 18px); z-index: 40;
+  width: 52px; height: 52px; border-radius: 18px 18px 18px 6px; border: 1px solid rgba(255,255,255,.25);
+  background: linear-gradient(135deg, rgba(34,211,238,.85), rgba(129,140,248,.85));
+  font-size: 24px; cursor: pointer; box-shadow: 0 10px 28px rgba(0,0,0,.5), 0 0 20px rgba(129,140,248,.5);
+  transition: transform .15s; }
+.admin-fab:active { transform: scale(.88); }
+.admin-back { display: inline-block; margin: 2px 4px 10px; font-size: 13px; font-weight: 800; color: var(--neon1); text-decoration: none; }
 
 /* admin */
 .admin-wrap { max-width: 720px; margin: 0 auto; padding: calc(var(--sat) + 14px) 14px 40px; position:relative; z-index:1; color: var(--ink); }

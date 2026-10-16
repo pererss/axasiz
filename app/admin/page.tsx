@@ -86,6 +86,7 @@ export default function Admin() {
     <div className="admin-wrap">
       <div className="mesh"><i className="blob b1" /><i className="blob b2" /><i className="blob b3" /></div>
       <h2 style={{ margin: "6px 4px 2px" }}>⚙️ Админ-панель</h2>
+      <a className="admin-back" href={devId() ? `/?tg_id=${devId()}` : "/"}>← В приложение</a>
       <p style={{ color: "#9aa6c8", fontSize: 13, margin: "0 4px 4px" }}>Подарки · задания · пользователи · заявки · оформление · настройки</p>
       <div style={{ fontSize: 12, color: devId() ? "#6ee7b7" : "#9aa6c8", margin: "0 4px 10px" }}>
         {devId() ? `● Вход: тестовый ID ${devId()} (локалка)` : "● Вход через Telegram"}

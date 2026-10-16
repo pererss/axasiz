@@ -33,7 +33,7 @@ export async function checkTask(u: UserState, t: Task): Promise<{ done: boolean;
     const r = await getChatMember(t.chatId, u.tgId);
     if (!r?.ok) {
       const desc: string = r?.description || "";
-      if (/bot is not a member|not enough rights|chat not found/i.test(desc))
+      if (/bot is not a member|not enough rights|chat not found|member list is inaccessible|not enough rights to manage/i.test(desc))
         return { done: false, message: "Проверка недоступна: бот не администратор этого чата. Сообщи администратору.", temp: true };
       return { done: false, message: "Проверка временно недоступна — ошибка Telegram. Попробуй через минуту.", temp: true };
     }
