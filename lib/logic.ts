@@ -34,21 +34,21 @@ export async function checkTask(u: UserState, t: Task): Promise<{ done: boolean;
     if (!r?.ok) {
       const desc: string = r?.description || "";
       if (/bot is not a member|not enough rights|chat not found/i.test(desc))
-        return { done: false, message: "Бот не является администратором этого чата — проверка невозможна. Сообщите администратору.", temp: true };
-      return { done: false, message: "Временная ошибка Telegram. Попробуй ещё раз через минуту.", temp: true };
+        return { done: false, message: "Проверка недоступна: бот не администратор этого чата. Сообщи администратору.", temp: true };
+      return { done: false, message: "Проверка временно недоступна — ошибка Telegram. Попробуй через минуту.", temp: true };
     }
     if (isMemberStatus(r.result?.status)) return { done: true, message: "Готово", definitive: true };
-    return { done: false, message: t.kind === "channel" ? "Пока не видим подписку. Проверь, что ты вступил в канал, и попробуй ещё раз." : "Пока не видим тебя в чате. Вступи в группу и попробуй ещё раз.", definitive: true };
+    return { done: false, message: t.kind === "channel" ? "Подписка не найдена. Убедись, что вступил в канал, и нажми «Проверить» ещё раз." : "Вступление не найдено. Убедись, что ты состоишь в чате, и попробуй ещё раз.", definitive: true };
   }
   if (t.kind === "invite") {
     const n = await db.inviteCount(u.tgId);
     if (n >= (t.requiredCount || 1)) return { done: true, message: "Готово" };
-    return { done: false, message: `Приглашено ${n} из ${t.requiredCount}. Учитываются только новые пользователи.` };
+    return { done: false, message: `Друзей пока не хватает: ${n} из ${t.requiredCount}. Засчитываются только новые пользователи.` };
   }
   // external_bot / link: manual or click-confirm
   if (t.manual) {
     const clickedAt = u.clicked[t.id];
-    if (!clickedAt) return { done: false, message: "Сначала нажми кнопку «Открыть» и выполни действие." };
+    if (!clickedAt) return { done: false, message: "Переход не найден: сначала нажми «Открыть» и выполни условие." };
     // Manual moderation: we accept confirmation only as "pending review" — here we count it as done
     // but flagged manual so admin knows. To stay honest, require 10s between click and verify.
     if (Date.now() - clickedAt < 5000) return { done: false, message: "Подожди несколько секунд после перехода, затем нажми «Проверить»." };
