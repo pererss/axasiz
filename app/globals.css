@@ -109,9 +109,14 @@ body::after {
 @keyframes floaty { 0%,100% { transform: translateY(0) rotate(-2deg);} 50% { transform: translateY(-9px) rotate(2deg);} }
 .sel .float { animation: celebr .7s ease; }
 @keyframes celebr { 0%{transform:scale(1) rotate(0)} 30%{transform:scale(1.18) rotate(-8deg)} 60%{transform:scale(1.1) rotate(6deg)} 100%{transform:scale(1) rotate(0)} }
-.shine { position:absolute; top:-40%; left:-30%; width:60%; height:180%; transform:rotate(20deg);
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.28), transparent); animation: shine 4s ease-in-out infinite; }
-@keyframes shine { 0%,60%{left:-40%} 100%{left:130%} }
+.shine { position:absolute; top:-40%; left:-45%; width:55%; height:180%; transform:rotate(20deg); pointer-events:none;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.28), transparent); animation: shine 2.6s linear infinite; }
+@keyframes shine { 0%{left:-45%} 100%{left:135%} }
+.gift-card:nth-child(2) .shine { animation-delay: -.7s; }
+.gift-card:nth-child(3) .shine { animation-delay: -1.4s; }
+.gift-card:nth-child(4) .shine { animation-delay: -2s; }
+.photo { animation: breathe 3.2s ease-in-out infinite; }
+@keyframes breathe { 0%,100%{filter:brightness(1);} 50%{filter:brightness(1.07);} }
 
 /* ---------- slow cinematic screen transitions ---------- */
 .slides { position: relative; }
