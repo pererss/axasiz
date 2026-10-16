@@ -352,7 +352,7 @@ export default function Home() {
                 <div>✦ Условия участия проверены.</div>
                 <div>{(claim?.eligible) ? "✦ Период ожидания завершён!" : `◇ Осталось дождаться окончания ${waitingDays}-дневного периода.`}</div>
                 {user?.waitingStatus === "violated" && <div style={{ background: "rgba(127,29,29,.5)", borderColor: "rgba(248,113,113,.4)" }}>⚡ {user.violationNote || "Условия нарушены."} Восстанови подписки — период начнётся заново после проверки.</div>}
-                {user?.waitingStatus === "violated" && <button className="btn primary" onClick={load}>Проверить восстановление</button>}
+                {user?.waitingStatus === "violated" && <button className="btn primary" onClick={() => load()}>Проверить восстановление</button>}
               </div>
             </div>
             <div className="glass rules">{rules}</div>
