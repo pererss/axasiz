@@ -56,7 +56,7 @@ export default function Home() {
     return d ? `?tg_id=${d}` : "";
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (keepScreen = false) => {
     setErr("");
     try {
       const r = await fetch(`/api/state${devQuery()}`, { headers: headers() });
@@ -76,10 +76,12 @@ export default function Home() {
       setWaitingDays(j.settings?.waitingDays || 7);
       setBlocks((j.settings?.blocks || []).filter((b: any) => b.enabled).sort((a: any, b: any) => (a.order || 0) - (b.order || 0)));
       setServerOffset(Date.now() - (j.serverNow || Date.now()));
-      // restore screen
-      if (j.user?.waitingStartedAt) setScreen(2);
-      else if (j.user?.selectedGiftId) setScreen(1);
-      else setScreen(0);
+      // restore screen (skip when we just navigated instantly)
+      if (!keepScreen) {
+        if (j.user?.waitingStartedAt) setScreen(2);
+        else if (j.user?.selectedGiftId) setScreen(1);
+        else setScreen(0);
+      }
       try {
         // forced screen for admin live preview (?screen=0|1|2)
         const f = new URLSearchParams(window.location.search).get("screen");
@@ -111,13 +113,13 @@ export default function Home() {
   async function chooseGift(g: Gift) {
     setSelected(g.id);
     try { tg()?.HapticFeedback?.impactOccurred("medium"); } catch {}
+    go(1); // instantly — no waiting for network
     try {
       const r = await fetch(`/api/select-gift${devQuery()}`, { method: "POST", headers: headers(), body: JSON.stringify({ giftId: g.id }) });
       const j = await r.json();
       if (!j.ok) throw new Error();
-      await load();
-      setTimeout(() => go(1), 450);
-    } catch { setErr("Не удалось сохранить выбор. Попробуй ещё раз."); }
+      await load(true);
+    } catch { setErr("Не удалось сохранить выбор. Проверь соединение — выбор может не сохраниться."); }
   }
 
   async function openTask(t: Task) {
