@@ -59,11 +59,16 @@ export default function Home() {
 
   const load = useCallback(async (keepScreen = false) => {
     setErr("");
-    try {
-      const r = await fetch(`/api/state${devQuery()}`, { headers: headers() });
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.error || "auth");
-      setGifts(j.gifts || []);
+    setLoading(true);
+    let lastErr = "";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 700 * attempt));
+        const r = await fetch(`/api/state${devQuery()}`, { headers: headers() });
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || "auth");
+        if (!j.gifts || j.gifts.length === 0) throw new Error("empty-gifts");
+        setGifts(j.gifts || []);
       setTasks(j.tasks || []);
       setUser(j.user);
       setSelected(j.user?.selectedGiftId || null);
@@ -91,9 +96,13 @@ export default function Home() {
       } catch {}
       if (j.allDone) setCelebrate(true);
       try { tg()?.ready(); tg()?.expand(); } catch {}
+      return;
     } catch (e: any) {
-      setErr("Не удалось загрузить данные. Проверь интернет и открой приложение из Telegram.");
-    } finally { setLoading(false); }
+      lastErr = e?.message || "load";
+    }
+    }
+    if (lastErr) setErr("Не удалось загрузить данные. Проверь интернет и открой приложение из Telegram.");
+    setLoading(false);
   }, [devQuery, headers]);
 
   useEffect(() => { load(); }, [load]);
@@ -211,7 +220,7 @@ export default function Home() {
           <i key={i} style={{ left: `${(i * 37) % 100}%`, background: ["#6366f1", "#06b6d4", "#ec4899", "#fbbf24", "#34d399"][i % 5], animationDelay: `${(i % 20) / 20}s` }} />
         ))}</div>
       )}
-      {err && <div className="msg err" style={{ marginBottom: 10 }}>{err}</div>}
+      {err && <div className="msg err" style={{ marginBottom: 10 }}>{err}<br /><button className="btn primary" style={{ marginTop: 8 }} onClick={() => load()}>Попробовать снова</button></div>}
       {isAdmin && (
         <button className="admin-fab" aria-label="Админ-панель" title="Админ-панель" onClick={() => {
           try {

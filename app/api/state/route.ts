@@ -6,6 +6,7 @@ import { ensureUser, revalidate, tasksForGift } from "@/lib/logic";
 export async function GET(req: NextRequest) {
   const { user, error } = await auth(req);
   if (!user) return NextResponse.json({ ok: false, error }, { status: 401 });
+  try {
   const u = await ensureUser(user.tgId, user);
   const [gifts, allTasks, settings] = await Promise.all([db.gifts(), db.tasks(), db.settings()]);
   const gift = gifts.find((g) => g.id === u.selectedGiftId) || null;
@@ -63,4 +64,8 @@ export async function GET(req: NextRequest) {
     refLink,
     isAdmin: (process.env.TELEGRAM_ADMIN_IDS || "").split(",").map((s) => s.trim()).includes(String(u.tgId)),
   });
+  } catch (e) {
+    console.error("state failed:", e instanceof Error ? e.message : e);
+    return NextResponse.json({ ok: false, error: "state-failed" }, { status: 500 });
+  }
 }

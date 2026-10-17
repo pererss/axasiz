@@ -45,7 +45,9 @@ function saveFile(d: FileDB) {
   } catch { /* ignore on read-only */ }
 }
 
-// ---- Postgres (optional) ----
+const USE_PG = () => Boolean(process.env.DATABASE_URL);
+
+// ---- Postgres (Supabase) ----
 let pgPool: any = null;
 function pool() {
   const url = process.env.DATABASE_URL;
@@ -53,8 +55,34 @@ function pool() {
   if (pgPool) return pgPool;
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { Pool } = require("pg");
-  pgPool = new Pool({ connectionString: url, ssl: { rejectUnauthorized: false } });
+  pgPool = new Pool({
+    connectionString: url,
+    ssl: { rejectUnauthorized: false },
+    max: 5,
+    connectionTimeoutMillis: 8000,
+    idleTimeoutMillis: 20000,
+  });
+  pgPool.on("error", () => { try { pgPool.end().catch(() => {}); } catch {} pgPool = null; });
   return pgPool;
+}
+
+/** Run fn with pg pool; on failure reset pool and retry once, then give up (null). */
+async function withPg<T>(fn: (p: any) => Promise<T>): Promise<T | null> {
+  const p0 = pool();
+  if (!p0) return null;
+  try {
+    return await fn(p0);
+  } catch {
+    try { await p0.end().catch(() => {}); } catch {}
+    pgPool = null;
+    const p1 = pool();
+    if (!p1) return null;
+    try {
+      return await fn(p1);
+    } catch {
+      return null;
+    }
+  }
 }
 
 let pgReady = false;
@@ -70,103 +98,124 @@ async function ensurePg() {
   for (const t of ["gifts", "tasks", "users", "referrals", "kv"]) {
     await p.query(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
   }
-  // seed if empty
-  const g = await p.query(`SELECT COUNT(*) c FROM gifts`);
-  if (Number(g.rows[0].c) === 0) {
-    for (const gift of defaultGifts()) await p.query(`INSERT INTO gifts VALUES ($1,$2)`, [gift.id, gift]);
-    for (const t of defaultTasks()) await p.query(`INSERT INTO tasks VALUES ($1,$2)`, [t.id, t]);
-    await p.query(`INSERT INTO kv VALUES ('settings',$1) ON CONFLICT (key) DO NOTHING`, [defaultSettings()]);
-  }
+  // idempotent seed (safe under concurrent first requests)
+  for (const gift of defaultGifts()) await p.query(`INSERT INTO gifts VALUES ($1,$2) ON CONFLICT (id) DO NOTHING`, [gift.id, gift]);
+  for (const t of defaultTasks()) await p.query(`INSERT INTO tasks VALUES ($1,$2) ON CONFLICT (id) DO NOTHING`, [t.id, t]);
+  await p.query(`INSERT INTO kv VALUES ('settings',$1) ON CONFLICT (key) DO NOTHING`, [defaultSettings()]);
   pgReady = true;
   return p;
 }
 
+/** PG read with one retry; throws when pg is configured but unreachable (never silently wrong data). */
+async function pgRead(fn: (p: any) => Promise<any>): Promise<any> {
+  const r = await withPg(async (p) => { await ensurePg(); return fn(p); });
+  if (r === null || r === undefined) throw new Error("db-unavailable");
+  return r;
+}
+
+/** PG write; throws when pg is configured but unreachable. */
+async function pgWrite(fn: (p: any) => Promise<unknown>): Promise<boolean> {
+  const r = await withPg(async (p) => { await ensurePg(); await fn(p); return true as const; });
+  return r === true;
+}
+
 export const db = {
-  usePg: () => Boolean(process.env.DATABASE_URL),
+  usePg: () => USE_PG(),
   async gifts(): Promise<Gift[]> {
-    const p = await ensurePg().catch(() => null);
-    if (p) {
-      const r = await p.query(`SELECT data FROM gifts`);
+    if (USE_PG()) {
+      const r = await pgRead((p) => p.query(`SELECT data FROM gifts`));
       return r.rows.map((x: any) => x.data).sort((a: any, b: any) => a.order - b.order);
     }
     return loadFile().gifts.sort((a, b) => a.order - b.order);
   },
   async tasks(): Promise<Task[]> {
-    const p = await ensurePg().catch(() => null);
-    if (p) {
-      const r = await p.query(`SELECT data FROM tasks`);
+    if (USE_PG()) {
+      const r = await pgRead((p) => p.query(`SELECT data FROM tasks`));
       return r.rows.map((x: any) => x.data).sort((a: any, b: any) => a.order - b.order);
     }
     return loadFile().tasks.sort((a, b) => a.order - b.order);
   },
   async settings(): Promise<Settings> {
-    const p = await ensurePg().catch(() => null);
-    if (p) {
-      const r = await p.query(`SELECT data FROM kv WHERE key='settings'`);
+    if (USE_PG()) {
+      const r = await pgRead((p) => p.query(`SELECT data FROM kv WHERE key='settings'`));
       return r.rows[0]?.data || defaultSettings();
     }
     return loadFile().settings;
   },
   async saveSettings(s: Settings) {
-    const p = await ensurePg().catch(() => null);
-    if (p) { await p.query(`INSERT INTO kv VALUES ('settings',$1) ON CONFLICT (key) DO UPDATE SET data=$1`, [s]); return; }
+    if (USE_PG()) {
+      if (!(await pgWrite((p) => p.query(`INSERT INTO kv VALUES ('settings',$1) ON CONFLICT (key) DO UPDATE SET data=$1`, [s])))) throw new Error("db-unavailable");
+      return;
+    }
     const d = loadFile(); d.settings = s; saveFile(d);
   },
   async saveGift(g: Gift) {
-    const p = await ensurePg().catch(() => null);
-    if (p) { await p.query(`INSERT INTO gifts VALUES ($1,$2) ON CONFLICT (id) DO UPDATE SET data=$2`, [g.id, g]); return; }
+    if (USE_PG()) {
+      if (!(await pgWrite((p) => p.query(`INSERT INTO gifts VALUES ($1,$2) ON CONFLICT (id) DO UPDATE SET data=$2`, [g.id, g])))) throw new Error("db-unavailable");
+      return;
+    }
     const d = loadFile();
     const i = d.gifts.findIndex((x) => x.id === g.id);
     if (i >= 0) d.gifts[i] = g; else d.gifts.push(g);
     saveFile(d);
   },
   async deleteGift(id: string) {
-    const p = await ensurePg().catch(() => null);
-    if (p) { await p.query(`DELETE FROM gifts WHERE id=$1`, [id]); return; }
+    if (USE_PG()) {
+      if (!(await pgWrite((p) => p.query(`DELETE FROM gifts WHERE id=$1`, [id])))) throw new Error("db-unavailable");
+      return;
+    }
     const d = loadFile(); d.gifts = d.gifts.filter((x) => x.id !== id); saveFile(d);
   },
   async saveTask(t: Task) {
-    const p = await ensurePg().catch(() => null);
-    if (p) { await p.query(`INSERT INTO tasks VALUES ($1,$2) ON CONFLICT (id) DO UPDATE SET data=$2`, [t.id, t]); return; }
+    if (USE_PG()) {
+      if (!(await pgWrite((p) => p.query(`INSERT INTO tasks VALUES ($1,$2) ON CONFLICT (id) DO UPDATE SET data=$2`, [t.id, t])))) throw new Error("db-unavailable");
+      return;
+    }
     const d = loadFile();
     const i = d.tasks.findIndex((x) => x.id === t.id);
     if (i >= 0) d.tasks[i] = t; else d.tasks.push(t);
     saveFile(d);
   },
   async deleteTask(id: string) {
-    const p = await ensurePg().catch(() => null);
-    if (p) { await p.query(`DELETE FROM tasks WHERE id=$1`, [id]); return; }
+    if (USE_PG()) {
+      if (!(await pgWrite((p) => p.query(`DELETE FROM tasks WHERE id=$1`, [id])))) throw new Error("db-unavailable");
+      return;
+    }
     const d = loadFile(); d.tasks = d.tasks.filter((x) => x.id !== id); saveFile(d);
   },
   async user(tgId: number): Promise<UserState | null> {
-    const p = await ensurePg().catch(() => null);
-    if (p) {
-      const r = await p.query(`SELECT data FROM users WHERE tg_id=$1`, [tgId]);
+    if (USE_PG()) {
+      const r = await pgRead((p) => p.query(`SELECT data FROM users WHERE tg_id=$1`, [tgId]));
       return r.rows[0]?.data || null;
     }
     return loadFile().users[String(tgId)] || null;
   },
   async saveUser(u: UserState) {
-    const p = await ensurePg().catch(() => null);
-    if (p) { await p.query(`INSERT INTO users VALUES ($1,$2) ON CONFLICT (tg_id) DO UPDATE SET data=$2`, [u.tgId, u]); return; }
+    if (USE_PG()) {
+      if (!(await pgWrite((p) => p.query(`INSERT INTO users VALUES ($1,$2) ON CONFLICT (tg_id) DO UPDATE SET data=$2`, [u.tgId, u])))) throw new Error("db-unavailable");
+      return;
+    }
     const d = loadFile(); d.users[String(u.tgId)] = u; saveFile(d);
   },
   async users(limit = 200): Promise<UserState[]> {
-    const p = await ensurePg().catch(() => null);
-    if (p) {
-      const r = await p.query(`SELECT data FROM users LIMIT $1`, [limit]);
+    if (USE_PG()) {
+      const r = await pgRead((p) => p.query(`SELECT data FROM users LIMIT $1`, [limit]));
       return r.rows.map((x: any) => x.data);
     }
     return Object.values(loadFile().users).slice(0, limit);
   },
   async addReferral(inviter: number, invited: number) {
     if (inviter === invited) return false;
-    const p = await ensurePg().catch(() => null);
-    if (p) {
-      const ex = await p.query(`SELECT * FROM referrals WHERE invited=$1`, [invited]);
-      if (ex.rows.length) return false;
-      await p.query(`INSERT INTO referrals VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [inviter, invited, Date.now()]);
-      return true;
+    if (USE_PG()) {
+      const res = await withPg(async (p) => {
+        await ensurePg();
+        const ex = await p.query(`SELECT * FROM referrals WHERE invited=$1`, [invited]);
+        if (ex.rows.length) return "dup" as const;
+        await p.query(`INSERT INTO referrals VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [inviter, invited, Date.now()]);
+        return "added" as const;
+      });
+      if (!res) throw new Error("db-unavailable");
+      return res === "added";
     }
     const d = loadFile();
     if (d.referrals.some((r) => r.invited === invited)) return false;
@@ -175,17 +224,15 @@ export const db = {
     return true;
   },
   async inviteCount(inviter: number): Promise<number> {
-    const p = await ensurePg().catch(() => null);
-    if (p) {
-      const r = await p.query(`SELECT COUNT(*) c FROM referrals WHERE inviter=$1`, [inviter]);
+    if (USE_PG()) {
+      const r = await pgRead((p) => p.query(`SELECT COUNT(*) c FROM referrals WHERE inviter=$1`, [inviter]));
       return Number(r.rows[0].c);
     }
     return loadFile().referrals.filter((r) => r.inviter === inviter).length;
   },
   async referralsOf(inviter: number) {
-    const p = await ensurePg().catch(() => null);
-    if (p) {
-      const r = await p.query(`SELECT * FROM referrals WHERE inviter=$1`, [inviter]);
+    if (USE_PG()) {
+      const r = await pgRead((p) => p.query(`SELECT * FROM referrals WHERE inviter=$1`, [inviter]));
       return r.rows;
     }
     return loadFile().referrals.filter((r) => r.inviter === inviter);
